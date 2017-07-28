@@ -17,11 +17,13 @@ vol.py -f mem --profile=<profile> notpetyakeys
 
 
 ### Output
-Output is every AES key used by NotPetya (on per fixed drive).
+Output is every AES key used by NotPetya (on per fixed drive). It is not possible for now to identify which key is associated to which device.
 
 
-### Next steps
-Python decryption tool to come.
+### Decryption
+```
+openssl aes-128-cbc -d -K <key> -nosalt -iv -in <encrypted_file> -out <clear_file>
+```
 
 
 ### Misc
