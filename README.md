@@ -27,4 +27,5 @@ Python decryption tool to come.
 
 ### Misc
 (c) Wavestone 2017
+
 Thanks to @gentilkiwi and @th3m4ks
