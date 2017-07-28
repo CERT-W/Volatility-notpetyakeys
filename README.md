@@ -5,6 +5,11 @@ This Volatility plugin is used to search for AES key withing a memory snapshot o
 Put the `notpetya.py` file in the `volatility/plugins/malware/` directory.
 Plugin should appear under `notpetyakeys` when running `vol.py --info`.
 
+
+### Dependencies
+This plugin depends on `yara` and `pefile`.
+
+
 ### Input
 The only input required is the 32-bit `rsaenh.dll` file from the filesystem of the infected host.
 You will find it:
