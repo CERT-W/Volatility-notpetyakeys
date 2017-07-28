@@ -23,3 +23,8 @@ Output is every AES key used by NotPetya (on per fixed drive).
 
 ### Next steps
 Python decryption tool to come.
+
+
+### Misc
+(c) Wavestone 2017
+Thanks to @gentilkiwi and @th3m4ks
