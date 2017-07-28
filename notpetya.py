@@ -49,81 +49,11 @@ class NotPetyaKeys(commands.Command):
 
     def __init__(self, config, *args):
         commands.Command.__init__(self, config, *args)
-
-        config.add_option('RSAENH', short_option='r', dest='dll', type=str, help='32-bit RSAENH.dll file from infected system')
         self.__keys = []
 
 
     def fetch_config(self, config_ptr):
         pass
-
-    def readExports(self):
-
-        try:
-            exports = {}
-            pe = pefile.PE(self._config.dll)
-
-            if not pe.is_dll():
-                debug.error("File does not seem to be DLL")
-
-            if pe.PE_TYPE != pefile.OPTIONAL_HEADER_MAGIC_PE: # not 32-bits
-                debug.error("DLL is not 32 bit version - search at C:\\Windows\\SysWOW64\\rasenh.dll")
-
-            for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-                exports[exp.name] = exp.address
-
-            return exports
-
-        except OSError, e:
-            debug.error("File could not be opened: %s" % str(e))
-
-        except pefile.PEFormatError, e:
-            debug.error("An error occurred while trying to load rsaenh.dll: %s" % str(e))
-
-
-    def genYaraRule(self, exports):
-
-        # Export name order in HCRYPTKEY structure
-        ORDER = ['CPGenKey', 'CPDeriveKey', 'CPDestroyKey', 'CPSetKeyParam',
-                'CPGetKeyParam', 'CPExportKey', 'CPImportKey', 'CPEncrypt',
-                'CPDecrypt', 'CPDuplicateKey']
-
-        searchBytes = []
-        for name in ORDER:
-            if not name in exports.keys():
-                debug.error("Export '%s' missing in DLL" % name)
-
-            address = exports[name]
-
-            searchString = '%.2x ?%.1x ?? ??' % (address & 0xFF, (address & 0x0F00) >> 8)
-            searchBytes.append(searchString)
-
-        searchBytes = ' '.join(searchBytes)
-        searchBytes+= ' ?? ?? ?? ?? ?? ?? ?? ??'
-        yararule = { 'HCRYPTKEY' : 'rule HCRYPTKEY { strings: $struct = { %s } condition: $struct }' % searchBytes }
-        return yararule
-
-
-    def getKey(self, hcryptkey, process_space):
-
-        # Many thanks to @gentilkiwi for this section
-        magic_1 = struct.unpack('<I', hcryptkey[-4:])[0]
-        addr_1 = magic_1 ^ 0xe35a172c
-        addr_2 = deref(addr_1, process_space)
-        key_struct = [
-                deref(addr_2+0, process_space), # UNK0
-                deref(addr_2+4, process_space), # AlgId
-                deref(addr_2+8, process_space), # Flags
-                deref(addr_2+12, process_space),# dwData
-                deref(addr_2+16, process_space),# data
-        ]
-
-        # Check if alg is CALG_AES_128
-        if key_struct[1] != 0x660e:
-            return None
-
-        key = read_bytes(key_struct[4], process_space, key_struct[3])
-        return key.encode('hex')
 
 
     def calculate(self):
@@ -132,23 +62,16 @@ class NotPetyaKeys(commands.Command):
         if not has_yara:
             debug.error("You must install yara to use this plugin")
 
-        if not has_pefile:
-            debug.error("You must install pefile to use this plugin")
-
-        if not self._config.dll:
-            debug.error("No RSAENH.dll provided")
-
-        exports = self.readExports()
-        rule = self.genYaraRule(exports)
-
         # Load the address space
         addr_space = utils.load_as(self._config)
         # Compile yara signatures
-        rules = yara.compile(sources=rule)
+        signature = { "AESKey" : "rule AESKey { strings: $struct =  { 0E 66 00 00 01 00 00 00 10 00 00 00 ?? ?? ?? ?? } condition: $struct }" }
+        rules = yara.compile(sources=signature)
 
         # Search for RUNDLL32 task
         # On 32-bit, only one process with #1 in it
         # On 64-bit, two processes, but only one on WOW64
+
         selected_task = None
         for task in tasks.pslist(addr_space):
             if task.ImageFileName.lower() != 'rundll32.exe':
@@ -166,6 +89,10 @@ class NotPetyaKeys(commands.Command):
         if selected_task is None:
             debug.error("Could not find suitable process in memory, make sure system is infected")
 
+        ranges = []
+        for vad, process_space in selected_task.get_vads():
+            ranges.append((vad.Start, vad.Start+vad.Length))
+
         # iterate through all VADs
         for vad, process_space in selected_task.get_vads():
             if vad.Length > 8*1024*1024*1024:
@@ -180,10 +107,20 @@ class NotPetyaKeys(commands.Command):
             # profit !
             if matches:
                 for offset, _, match in matches[0].strings:
-                    key = self.getKey(match, process_space)
 
-                    if key is not None:
-                        self.__keys.append((vad.Start+offset, key))
+                    keyaddr = struct.unpack('<I', read_bytes(vad.Start + offset + 12, process_space))[0]
+
+                    inRange = False
+                    for start, end in ranges:
+                        if start <= keyaddr and keyaddr < end:
+                            inRange = True
+                            break
+
+                    if not inRange:
+                        continue
+
+                    key = read_bytes(keyaddr, process_space, 16)
+                    self.__keys.append((keyaddr, key.encode('hex')))
 
 
     def render_text(self, outfd, data):

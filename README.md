@@ -7,18 +7,12 @@ Plugin should appear under `notpetyakeys` when running `vol.py --info`.
 
 
 ### Dependencies
-This plugin depends on `yara` and `pefile`.
+This plugin depends on `yara`.
 
-
-### Input
-The only input required is the 32-bit `rsaenh.dll` file from the filesystem of the infected host.
-You will find it:
-* On 32-bit hosts, at `C:\WINDOWS\System32\rsaenh.dll`
-* On 64-bit hosts, at `C:\WINDOWS\SysWOW64\rsaenh.dll`
 
 ### Usage
 ```
-vol.py -f mem --profile=<profile> notpetyakeys -r rsaenh.dll
+vol.py -f mem --profile=<profile> notpetyakeys
 ```
 
 
