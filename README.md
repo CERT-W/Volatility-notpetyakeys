@@ -22,7 +22,7 @@ Output is every AES key used by NotPetya (on per fixed drive). It is not possibl
 
 ### Decryption
 ```
-openssl aes-128-cbc -d -K <key> -nosalt -iv -in <encrypted_file> -out <clear_file>
+openssl aes-128-cbc -d -K <key> -nosalt -iv 0 -in <encrypted_file> -out <clear_file>
 ```
 
 
